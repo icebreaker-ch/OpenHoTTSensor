@@ -17,8 +17,6 @@
 
 SoftwareSerial serial(4, 5);
 
-uint8_t module = 0;
-
 typedef enum {
     WAIT_START,
     WAIT_ID,
@@ -53,27 +51,27 @@ void sendData() {
     uint16_t current = 666; // 66.6 A
     uint16_t altitude = OFFSET_ALTITUDE + alt++; // altitude m
     uint16_t vspeed = OFFSET_VSPEED + 235; // 2.35 m/s
-    uint16_t capacity = module; //72; // 720 mAh
+    uint16_t capacity = 72; // 720 mAh
 
     telemetry_data[0] = BINARY_DATA_START;
-    telemetry_data[1] = HOTT_GENERAL_AIR_MODULE_ID;
+    telemetry_data[1] = HOTT_ELECTRIC_AIR_MODULE_ID;
     telemetry_data[2] = 0x00; // Warnings
-    telemetry_data[3] = HOTT_GENERAL_AIR_SENSOR_ID;
+    telemetry_data[3] = HOTT_ELECTRIC_AIR_SENSOR_ID;
 
-    telemetry_data[23] = altitude & 0xFF; // Altitude
-    telemetry_data[24] = (altitude >> 8) & 0xFF;
+    telemetry_data[26] = altitude & 0xFF; // Altitude
+    telemetry_data[27] = (altitude >> 8) & 0xFF;
 
     telemetry_data[28] = current & 0xFF; // Current
     telemetry_data[29] = (current >> 8) & 0xFF;
 
-    telemetry_data[12] = voltage & 0xFF;
-    telemetry_data[13] = (voltage >> 8) & 0xFF;
+    telemetry_data[30] = voltage & 0xFF;
+    telemetry_data[31] = (voltage >> 8) & 0xFF;
 
     telemetry_data[32] = capacity & 0xFF;
     telemetry_data[33] = (capacity >> 8) & 0xFF;
 
-    telemetry_data[25] = vspeed & 0xFF; // climb rate
-    telemetry_data[26] = (vspeed >> 8) & 0xFF;
+    telemetry_data[34] = vspeed & 0xFF; // climb rate
+    telemetry_data[35] = (vspeed >> 8) & 0xFF;
 
     telemetry_data[43] = BINARY_DATA_STOP;
 
@@ -87,6 +85,7 @@ void sendData() {
 }
 
 void setup() {
+    Serial.begin(9600);
     serial.begin(HOTT_BAUDRATE);
     pinMode(LED_BUILTIN, OUTPUT);
 }
@@ -94,13 +93,9 @@ void setup() {
 void loop() {
     static State state = WAIT_START;
 
-    sendData();
-
-// Seems it does not work when waiting for request!
-#if 0
     switch(state) {
         case WAIT_START:
-            Serial.println("Wait");
+            // Serial.println("Wait");
             if ((serial.available()) && (serial.read() == HOTT_BINARY_MODE_REQUEST_ID))
                 state = WAIT_ID;
             break;
@@ -108,7 +103,9 @@ void loop() {
         case WAIT_ID:
             Serial.println("Wait ID");
             if (serial.available()) {
-                if (serial.read() == HOTT_GENERAL_AIR_MODULE_ID)
+                uint8_t moduleId = serial.read();
+                Serial.println(moduleId, 16);
+                if (moduleId == HOTT_ELECTRIC_AIR_MODULE_ID)
                     state = SEND_DATA;
                 else
                     state = WAIT_START;
@@ -123,5 +120,4 @@ void loop() {
             digitalWrite(LED_BUILTIN, HIGH);
             break;
     }
-#endif
 }
