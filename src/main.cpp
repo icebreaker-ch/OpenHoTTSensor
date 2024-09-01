@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 
-#define HOTT_BAUDRATE 19200
+#define HOTT_BAUDRATE 19400
 #define BINARY_SIZE 45
 #define BINARY_DATA_START 0x7C
 #define BINARY_DATA_STOP 0x7D
@@ -12,10 +12,13 @@
 #define HOTT_GENERAL_AIR_MODULE_ID 0x8D
 #define HOTT_GENERAL_AIR_SENSOR_ID 0xD0
 
+#define HOTT_VARIO_MODULE_ID 0x89
+#define HOTT_VARIO_SENSOR_ID 0x90
+
 #define OFFSET_ALTITUDE 500
 #define OFFSET_VSPEED 30000
 
-SoftwareSerial serial(4, 5);
+SoftwareSerial serial(8, 9);
 
 typedef enum {
     WAIT_START,
@@ -32,7 +35,39 @@ uint8_t getCheckSum(uint8_t *buffer, int size) {
     return checkSum;
 }
 
-void sendData() {
+void sendData(uint8_t *data, int size) {
+    for (int i = 0; i < size; ++i) {
+        serial.write(data[i]);
+//        Serial.print(data[i], 16);
+//        Serial.print(" ");
+//        delay(2);
+    }
+//    Serial.println();
+}
+
+void sendVario() {
+    static uint16_t alt = 0;
+
+    uint8_t telemetry_data[BINARY_SIZE];
+    memset(telemetry_data, 0x00, BINARY_SIZE);
+
+    uint16_t altitude = OFFSET_ALTITUDE + alt++; // 123 m
+    uint16_t vspeed = OFFSET_VSPEED + 321; // 3.21 m/s
+
+    telemetry_data[0] = BINARY_DATA_START;
+    telemetry_data[1] = HOTT_VARIO_MODULE_ID;
+    telemetry_data[3] = HOTT_VARIO_SENSOR_ID;
+    telemetry_data[5] = altitude & 0xFF;
+    telemetry_data[6] = (altitude >> 8) & 0xFF;
+    telemetry_data[11] = vspeed & 0xFF;
+    telemetry_data[12] = (vspeed >> 8) & 0xFF;
+    telemetry_data[43] = BINARY_DATA_STOP;
+    telemetry_data[44] = getCheckSum(telemetry_data, BINARY_SIZE - 1);
+
+    sendData(telemetry_data, BINARY_SIZE);
+}
+
+void sendEAM() {
     uint8_t telemetry_data[BINARY_SIZE] = {
         0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -77,11 +112,7 @@ void sendData() {
 
     telemetry_data[BINARY_SIZE - 1] = getCheckSum(telemetry_data, BINARY_SIZE - 1);
 
-    //serial.write(telemetry_data, BINARY_SIZE);
-    for (int i = 0; i < BINARY_SIZE; ++i) {
-        serial.write(telemetry_data[i]);
-        delay(2);
-    }
+    sendData(telemetry_data, BINARY_SIZE);
 }
 
 void setup() {
@@ -90,34 +121,60 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
 }
 
+
 void loop() {
     static State state = WAIT_START;
 
+#if 0
+    if (serial.available() >= 2) {        
+        uint8_t b1 = serial.read();
+        if (b1 == HOTT_BINARY_MODE_REQUEST_ID) {
+            uint8_t b2 = serial.read();
+        }
+    }
+    sendEAM();
+ #endif
+
+#if 1
     switch(state) {
         case WAIT_START:
-            // Serial.println("Wait");
-            if ((serial.available()) && (serial.read() == HOTT_BINARY_MODE_REQUEST_ID))
-                state = WAIT_ID;
+            int count = Serial1.available();
+            Serial.println(count);
+            Serial.print("Count: ");
+            if (count > 0) {
+                uint8_t requestId = Serial1.read();
+                Serial.println(requestId, 16);
+                if (requestId == HOTT_BINARY_MODE_REQUEST_ID) {
+                    state = WAIT_ID;
+                    Serial.println("WAIT_ID");
+                }
+            }
             break;
 
         case WAIT_ID:
-            Serial.println("Wait ID");
-            if (serial.available()) {
-                uint8_t moduleId = serial.read();
+            if (Serial1.available()) {
+                uint8_t moduleId = Serial1.read();
                 Serial.println(moduleId, 16);
-                if (moduleId == HOTT_ELECTRIC_AIR_MODULE_ID)
+                if (moduleId == HOTT_VARIO_MODULE_ID) {
                     state = SEND_DATA;
-                else
+                    Serial.println("SEND_DATA");
+                }
+                else {
                     state = WAIT_START;
+                    Serial.println("WAIT_START");
+                }
             }
             break;
 
         case SEND_DATA:
-            Serial.println("Send");
-            digitalWrite(LED_BUILTIN, LOW);
-            sendData();
-            state = WAIT_START;
             digitalWrite(LED_BUILTIN, HIGH);
+            sendVario();
+            state = WAIT_START;
+            Serial.println("WAIT_START");
+            digitalWrite(LED_BUILTIN, LOW);
             break;
     }
+
+    //delay(100);
+#endif
 }
