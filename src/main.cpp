@@ -1,22 +1,15 @@
 #include <Arduino.h>
+#include "BinaryModule.h"
 #include <SoftwareSerial.h>
+#include "ElectricAirModule.h"
 
-#define HOTT_BAUDRATE 19400
-#define BINARY_SIZE 45
-#define BINARY_DATA_START 0x7C
-#define BINARY_DATA_STOP 0x7D
-#define HOTT_BINARY_MODE_REQUEST_ID 0x80
-#define HOTT_ELECTRIC_AIR_MODULE_ID 0x8E
-#define HOTT_ELECTRIC_AIR_SENSOR_ID 0xE0
+#define HOTT_BAUDRATE 19200
 
-#define HOTT_GENERAL_AIR_MODULE_ID 0x8D
-#define HOTT_GENERAL_AIR_SENSOR_ID 0xD0
+//#define HOTT_GENERAL_AIR_MODULE_ID 0x8D
+//#define HOTT_GENERAL_AIR_SENSOR_ID 0xD0
 
-#define HOTT_VARIO_MODULE_ID 0x89
-#define HOTT_VARIO_SENSOR_ID 0x90
-
-#define OFFSET_ALTITUDE 500
-#define OFFSET_VSPEED 30000
+//#define HOTT_VARIO_MODULE_ID 0x89
+//#define HOTT_VARIO_SENSOR_ID 0x90
 
 SoftwareSerial serial(8, 9);
 
@@ -37,14 +30,18 @@ uint8_t getCheckSum(uint8_t *buffer, int size) {
 
 void sendByte(uint8_t byte) {
     serial.write(byte);
+    Serial.print(byte, 16);
+    Serial.print(" ");
 }
 
 void sendData(uint8_t *data, int size) {
     for (int i = 0; i < size; ++i) {
         sendByte(data[i]);
     }
+    Serial.println();
 }
 
+#if 0
 void sendVario() {
     static uint16_t alt = 0;
 
@@ -67,61 +64,37 @@ void sendVario() {
     sendData(telemetry_data, BINARY_SIZE);
 }
 
-void sendEAM() {
-    uint8_t telemetry_data[BINARY_SIZE];
-    memset(telemetry_data, 0x00, BINARY_SIZE);
+#endif
 
-    static uint16_t alt = 1;
-
-    uint16_t voltage = 225; // 22.5 V
-    uint16_t current = 666; // 66.6 A
-    uint16_t altitude = OFFSET_ALTITUDE + alt++; // altitude m
-    uint16_t vspeed = OFFSET_VSPEED + 235; // 2.35 m/s
-    uint16_t capacity = 72; // 720 mAh
-
-    telemetry_data[0] = BINARY_DATA_START;
-    telemetry_data[1] = HOTT_ELECTRIC_AIR_MODULE_ID;
-    telemetry_data[2] = 0x00; // Warnings
-    telemetry_data[3] = HOTT_ELECTRIC_AIR_SENSOR_ID;
-
-    telemetry_data[26] = altitude & 0xFF; // Altitude
-    telemetry_data[27] = (altitude >> 8) & 0xFF;
-
-    telemetry_data[28] = current & 0xFF; // Current
-    telemetry_data[29] = (current >> 8) & 0xFF;
-
-    telemetry_data[30] = voltage & 0xFF;
-    telemetry_data[31] = (voltage >> 8) & 0xFF;
-
-    telemetry_data[32] = capacity & 0xFF;
-    telemetry_data[33] = (capacity >> 8) & 0xFF;
-
-    telemetry_data[34] = vspeed & 0xFF; // climb rate
-    telemetry_data[35] = (vspeed >> 8) & 0xFF;
-
-    telemetry_data[43] = BINARY_DATA_STOP;
-
-    telemetry_data[BINARY_SIZE - 1] = getCheckSum(telemetry_data, BINARY_SIZE - 1);
-
-    sendData(telemetry_data, BINARY_SIZE);
-}
+static ElectricAirModule eam;
 
 void setup() {
     Serial.begin(9600);
     serial.begin(HOTT_BAUDRATE);
     pinMode(LED_BUILTIN, OUTPUT);
+
+    // Example values
+    eam.setAltitude(0);
+    eam.setCapacity(0);
+    eam.setCurrent(66.6);
+    eam.setMainVoltage(22.5);
+    eam.setVSpeed(3.2);
 }
 
-
 void loop() {
+    static double altitude = 0;
+    static double capacity = 0;
+
     static State state = WAIT_START;
 
     switch(state) {
         case WAIT_START:
+            serial.listen();
             if (serial.available())
             {
                 uint8_t requestId = serial.read();
-                if (requestId == HOTT_BINARY_MODE_REQUEST_ID) {
+                Serial.println(requestId, 16);
+                if (requestId == BinaryModule::HOTT_BINARY_MODE_REQUEST_ID) {
                     state = WAIT_ID;
                 }
             }
@@ -130,9 +103,10 @@ void loop() {
         case WAIT_ID:
             if (serial.available()) {
                 uint8_t moduleId = serial.read();
-                if (moduleId == HOTT_ELECTRIC_AIR_MODULE_ID) {
+                Serial.println(moduleId, 16);
+                if (moduleId == ElectricAirModule::MODULE_ID) {
                     // Echo RID and MID since we do not use the special diode cable
-                    sendByte(HOTT_BINARY_MODE_REQUEST_ID);
+                    sendByte(BinaryModule::HOTT_BINARY_MODE_REQUEST_ID);
                     sendByte(moduleId);
                     state = SEND_DATA;
                 }
@@ -144,7 +118,14 @@ void loop() {
 
         case SEND_DATA:
             digitalWrite(LED_BUILTIN, HIGH);
-            sendVario();
+            sendData(eam.getFrame(), BinaryModule::FRAME_SIZE);
+
+            // Example values
+            altitude = altitude + 0.1;
+            eam.setAltitude(altitude);
+            capacity = capacity + 0.1;
+            eam.setCapacity(capacity);
+
             state = WAIT_START;
             digitalWrite(LED_BUILTIN, LOW);
             break;
