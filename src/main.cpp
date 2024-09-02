@@ -35,14 +35,14 @@ uint8_t getCheckSum(uint8_t *buffer, int size) {
     return checkSum;
 }
 
+void sendByte(uint8_t byte) {
+    serial.write(byte);
+}
+
 void sendData(uint8_t *data, int size) {
     for (int i = 0; i < size; ++i) {
-        serial.write(data[i]);
-//        Serial.print(data[i], 16);
-//        Serial.print(" ");
-//        delay(2);
+        sendByte(data[i]);
     }
-//    Serial.println();
 }
 
 void sendVario() {
@@ -68,17 +68,8 @@ void sendVario() {
 }
 
 void sendEAM() {
-    uint8_t telemetry_data[BINARY_SIZE] = {
-        0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00,
-        0x00
-    };
+    uint8_t telemetry_data[BINARY_SIZE];
+    memset(telemetry_data, 0x00, BINARY_SIZE);
 
     static uint16_t alt = 1;
 
@@ -125,43 +116,28 @@ void setup() {
 void loop() {
     static State state = WAIT_START;
 
-#if 0
-    if (serial.available() >= 2) {        
-        uint8_t b1 = serial.read();
-        if (b1 == HOTT_BINARY_MODE_REQUEST_ID) {
-            uint8_t b2 = serial.read();
-        }
-    }
-    sendEAM();
- #endif
-
-#if 1
     switch(state) {
         case WAIT_START:
-            int count = Serial1.available();
-            Serial.println(count);
-            Serial.print("Count: ");
-            if (count > 0) {
-                uint8_t requestId = Serial1.read();
-                Serial.println(requestId, 16);
+            if (serial.available())
+            {
+                uint8_t requestId = serial.read();
                 if (requestId == HOTT_BINARY_MODE_REQUEST_ID) {
                     state = WAIT_ID;
-                    Serial.println("WAIT_ID");
                 }
             }
             break;
 
         case WAIT_ID:
-            if (Serial1.available()) {
-                uint8_t moduleId = Serial1.read();
-                Serial.println(moduleId, 16);
-                if (moduleId == HOTT_VARIO_MODULE_ID) {
+            if (serial.available()) {
+                uint8_t moduleId = serial.read();
+                if (moduleId == HOTT_ELECTRIC_AIR_MODULE_ID) {
+                    // Echo RID and MID since we do not use the special diode cable
+                    sendByte(HOTT_BINARY_MODE_REQUEST_ID);
+                    sendByte(moduleId);
                     state = SEND_DATA;
-                    Serial.println("SEND_DATA");
                 }
                 else {
                     state = WAIT_START;
-                    Serial.println("WAIT_START");
                 }
             }
             break;
@@ -170,11 +146,7 @@ void loop() {
             digitalWrite(LED_BUILTIN, HIGH);
             sendVario();
             state = WAIT_START;
-            Serial.println("WAIT_START");
             digitalWrite(LED_BUILTIN, LOW);
             break;
     }
-
-    //delay(100);
-#endif
 }
