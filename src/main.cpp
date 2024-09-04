@@ -1,17 +1,15 @@
 #include <Arduino.h>
 #include "BinaryModule.h"
-#include <SoftwareSerial.h>
 #include "ElectricAirModule.h"
+#include "RxCommunication.h"
 
 #define HOTT_BAUDRATE 19200
 
 //#define HOTT_GENERAL_AIR_MODULE_ID 0x8D
 //#define HOTT_GENERAL_AIR_SENSOR_ID 0xD0
 
-//#define HOTT_VARIO_MODULE_ID 0x89
-//#define HOTT_VARIO_SENSOR_ID 0x90
 
-SoftwareSerial serial(8, 9);
+RxCommunication *pRxCommunication;
 
 typedef enum {
     WAIT_START,
@@ -20,16 +18,8 @@ typedef enum {
 } State;
 
 
-uint8_t getCheckSum(uint8_t *buffer, int size) {
-    uint8_t checkSum = 0;
-    for (int pos = 0;pos < size; ++pos) {
-        checkSum += buffer[pos];
-    }
-    return checkSum;
-}
-
 void sendByte(uint8_t byte) {
-    serial.write(byte);
+    pRxCommunication->write(byte);
     Serial.print(byte, 16);
     Serial.print(" ");
 }
@@ -41,36 +31,11 @@ void sendData(uint8_t *data, int size) {
     Serial.println();
 }
 
-#if 0
-void sendVario() {
-    static uint16_t alt = 0;
-
-    uint8_t telemetry_data[BINARY_SIZE];
-    memset(telemetry_data, 0x00, BINARY_SIZE);
-
-    uint16_t altitude = OFFSET_ALTITUDE + alt++; // 123 m
-    uint16_t vspeed = OFFSET_VSPEED + 321; // 3.21 m/s
-
-    telemetry_data[0] = BINARY_DATA_START;
-    telemetry_data[1] = HOTT_VARIO_MODULE_ID;
-    telemetry_data[3] = HOTT_VARIO_SENSOR_ID;
-    telemetry_data[5] = altitude & 0xFF;
-    telemetry_data[6] = (altitude >> 8) & 0xFF;
-    telemetry_data[11] = vspeed & 0xFF;
-    telemetry_data[12] = (vspeed >> 8) & 0xFF;
-    telemetry_data[43] = BINARY_DATA_STOP;
-    telemetry_data[44] = getCheckSum(telemetry_data, BINARY_SIZE - 1);
-
-    sendData(telemetry_data, BINARY_SIZE);
-}
-
-#endif
-
 static ElectricAirModule eam;
 
 void setup() {
     Serial.begin(9600);
-    serial.begin(HOTT_BAUDRATE);
+    pRxCommunication = new RxCommunication(9, HOTT_BAUDRATE);
     pinMode(LED_BUILTIN, OUTPUT);
 
     // Example values
@@ -89,10 +54,10 @@ void loop() {
 
     switch(state) {
         case WAIT_START:
-            serial.listen();
-            if (serial.available())
+            pRxCommunication->listen();
+            if (pRxCommunication->available())
             {
-                uint8_t requestId = serial.read();
+                uint8_t requestId = pRxCommunication->read();
                 Serial.println(requestId, 16);
                 if (requestId == BinaryModule::HOTT_BINARY_MODE_REQUEST_ID) {
                     state = WAIT_ID;
@@ -101,8 +66,8 @@ void loop() {
             break;
 
         case WAIT_ID:
-            if (serial.available()) {
-                uint8_t moduleId = serial.read();
+            if (pRxCommunication->available()) {
+                uint8_t moduleId = pRxCommunication->read();
                 Serial.println(moduleId, 16);
                 if (moduleId == ElectricAirModule::MODULE_ID) {
                     // Echo RID and MID since we do not use the special diode cable

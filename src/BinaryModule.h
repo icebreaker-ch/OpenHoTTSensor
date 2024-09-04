@@ -15,7 +15,7 @@ class BinaryModule {
 
     protected:
         uint8_t frame[FRAME_SIZE];
-        uint8_t calcCheckSum(uint8_t buffer[], int fromPos, int toPos);
+        uint8_t calcCheckSum(uint8_t buffer[], unsigned int fromPos, unsigned int toPos);
         uint8_t lsb(uint16_t val) { return val & 0xFF; }
         uint8_t msb(uint16_t val) { return (val >> 8 ) & 0xFF; }
 };

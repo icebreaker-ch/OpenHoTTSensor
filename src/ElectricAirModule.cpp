@@ -44,12 +44,11 @@ uint8_t *ElectricAirModule::getFrame() {
     frame[32] = lsb(telemetryCapacity);
     frame[33] = msb(telemetryCapacity);
 
-    uint16_t telemetryVSpeed = static_cast<uint16_t>(VSPEED_OFFSET + (vSpeed) * VSPEED_FACTOR);
+    uint16_t telemetryVSpeed = static_cast<uint16_t>(VSPEED_OFFSET + round(vSpeed) * VSPEED_FACTOR);
     frame[34] = lsb(telemetryVSpeed);
     frame[35] = msb(telemetryVSpeed);
 
     frame[43] = HOTT_BINARY_DATA_END;
-
     frame[44] = calcCheckSum(frame, 0, 43);
 
     return frame;
