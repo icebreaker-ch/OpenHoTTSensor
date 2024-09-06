@@ -1,25 +1,41 @@
 #include "RxCommunication.h"
 
+RxCommunication::RxCommunication(uint8_t pin, long speed) :
+    fullDuplex(false),
+    rxPin(pin),
+    txPin(pin),
+    serial(pin, pin),
+    delayBetweenChars(0) {
+        pinMode(pin, INPUT);
+        serial.begin(speed);
+        serial.listen(); // Start listening
+}
+
 RxCommunication::RxCommunication(uint8_t rxPin, uint8_t txPin, long speed) :
+    fullDuplex(true),
     rxPin(rxPin),
     txPin(txPin),
-    serial(rxPin, txPin) {
-        if (rxPin == txPin)
-            pinMode(rxPin, INPUT);
-        serial.begin(speed);
-        serial.listen();
+    serial(rxPin, txPin),
+    delayBetweenChars(0) {
+    serial.begin(speed);
+}
+
+void RxCommunication::setDelayBetweenChars(unsigned long delayBetweenChars) {
+    this->delayBetweenChars = delayBetweenChars;
 }
 
 void RxCommunication::listen() {
-    if (rxPin == txPin)
+    if (! fullDuplex) {
         pinMode(rxPin, INPUT);
-    serial.listen();
+        serial.listen();
+    }
 }
 
 void RxCommunication::stopListening() {
-    if (rxPin == txPin)
+    if (! fullDuplex) {
         pinMode(txPin, OUTPUT);
-    serial.stopListening();
+        serial.stopListening();
+    }
 }
 
 int RxCommunication::available() {
@@ -32,7 +48,8 @@ int RxCommunication::read() {
 
 void RxCommunication::write(uint8_t byte) {
     serial.write(byte);
-    delay(2);
+    if (delayBetweenChars > 0)
+        delay(delayBetweenChars);
 }
 
 void RxCommunication::write(const uint8_t *buffer, size_t size) {

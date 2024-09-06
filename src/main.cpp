@@ -14,7 +14,6 @@ RxCommunication *pRxCommunication;
 typedef enum {
     WAIT_START,
     WAIT_ID,
-    DELAY,
     SEND_DATA
 } State;
 
@@ -24,7 +23,8 @@ static ElectricAirModule eam;
 void setup() {
     Serial.begin(9600);
     pRxCommunication = new RxCommunication(8, 9, HOTT_BAUDRATE);
-    pRxCommunication->listen();
+    //pRxCommunication = new RxCommunication(8, HOTT_BAUDRATE);
+    pRxCommunication->setDelayBetweenChars(2);
     pinMode(LED_BUILTIN, OUTPUT);
 
     // Example values
@@ -60,22 +60,12 @@ void loop() {
                 moduleId = pRxCommunication->read();
                 Serial.println(moduleId, 16);
                 if (moduleId == ElectricAirModule::MODULE_ID) {
-                    state = DELAY;
                     state = SEND_DATA;
-                }
-                else {
+                } else {
                     state = WAIT_START;
                 }
             }
             break;
-
-        case DELAY:
-            Serial.println("DELAY");
-            delay(50); // Grace time
-            if (pRxCommunication->available() == 0)
-                state = SEND_DATA;
-            else
-                state = WAIT_START;
 
         case SEND_DATA:
             Serial.println("SEND");
